@@ -5,7 +5,6 @@
 
 <strong>Hagen</strong> allows you to ask natural language questions against internal documents and get back reliable answers backed by quotes and references from the source material so that you can always trust what you get back. You can connect to a number of common tools such as Slack, GitHub, Confluence, amongst others.
 
-
 ## 💃 Features 
 * Direct QA + Chat powered by Generative AI models with answers backed by quotes and source links.
 * Intelligent Document Retrieval (Hybrid Search + Reranking) using the latest NLP models.
