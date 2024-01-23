@@ -91,7 +91,11 @@ def make_slack_api_rate_limited(
                         f"Slack call rate limited, retrying after {retry_after} seconds. Exception: {e}"
                     )
                     time.sleep(retry_after)
+<<<<<<< HEAD
                 if e.response["error"] in ["already_reacted", "no_reaction"]:
+=======
+                elif e.response["error"] in ["already_reacted", "no_reaction"]:
+>>>>>>> upstream/main
                     # The response isn't used for reactions, this is basically just a pass
                     return e.response
                 else:
