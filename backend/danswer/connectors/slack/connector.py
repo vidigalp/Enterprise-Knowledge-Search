@@ -170,7 +170,7 @@ def thread_to_doc(
         semantic_identifier=channel["name"],
         doc_updated_at=get_latest_message_time(thread),
         title="",  # slack docs don't really have a "title"
-        metadata={"slack_channel": channel["name"]},
+        metadata={},
     )
 
 
@@ -444,4 +444,3 @@ if __name__ == "__main__":
     document_batches = connector.poll_source(one_day_ago, current)
 
     print(next(document_batches))
-

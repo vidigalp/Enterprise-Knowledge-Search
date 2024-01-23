@@ -28,10 +28,7 @@ from danswer.utils.timing import log_function_time
 logger = setup_logger()
 
 
-<<<<<<< HEAD
-=======
 @log_function_time(print_only=True)
->>>>>>> upstream/main
 def retrieval_preprocessing(
     query: str,
     retrieval_details: RetrievalDetails,

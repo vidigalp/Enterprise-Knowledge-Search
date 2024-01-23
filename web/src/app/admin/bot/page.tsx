@@ -177,8 +177,6 @@ const Main = () => {
       {popup}
 
       <Text className="mb-2">
-        Setup a Slack bot that connects to Hagen. Once setup, you will be able
-        to ask questions to Hagen directly from Slack. Additionally, you can:
       </Text>
 
       <Text className="mb-2">

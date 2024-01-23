@@ -49,9 +49,6 @@ export default function Page() {
       />
 
       <Text>
-        Connect Hagen to your organization&apos;s knowledge sources.
-        We&apos;ll automatically sync your data into Hagen, so you can find
-        exactly what you&apos;re looking for in one place.
       </Text>
 
       <div className="flex mt-8">

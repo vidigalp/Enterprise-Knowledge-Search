@@ -2,10 +2,7 @@ from typing import Any
 from typing import cast
 
 from slack_sdk import WebClient
-<<<<<<< HEAD
-=======
 from slack_sdk.models.blocks import SectionBlock
->>>>>>> upstream/main
 from slack_sdk.models.views import View
 from slack_sdk.socket_mode import SocketModeClient
 from slack_sdk.socket_mode.request import SocketModeRequest
@@ -13,10 +10,7 @@ from sqlalchemy.orm import Session
 
 from danswer.configs.constants import SearchFeedbackType
 from danswer.configs.danswerbot_configs import DANSWER_FOLLOWUP_EMOJI
-<<<<<<< HEAD
-=======
 from danswer.connectors.slack.utils import make_slack_api_rate_limited
->>>>>>> upstream/main
 from danswer.danswerbot.slack.blocks import build_follow_up_resolved_blocks
 from danswer.danswerbot.slack.blocks import get_document_feedback_blocks
 from danswer.danswerbot.slack.config import get_slack_bot_config_for_channel
@@ -197,9 +191,6 @@ def handle_followup_resolved_button(
     client: SocketModeClient,
 ) -> None:
     channel_id = req.payload["container"]["channel_id"]
-<<<<<<< HEAD
-    thread_ts = req.payload["container"]["thread_ts"]
-=======
     message_ts = req.payload["container"]["message_ts"]
     thread_ts = req.payload["container"]["thread_ts"]
     clicker_backup_name = req.payload.get("user", {}).get("name", "Someone")
@@ -212,7 +203,6 @@ def handle_followup_resolved_button(
     except Exception:
         # Likely a scope issue
         pass
->>>>>>> upstream/main
 
     update_emote_react(
         emoji=DANSWER_FOLLOWUP_EMOJI,
@@ -221,8 +211,6 @@ def handle_followup_resolved_button(
         remove=True,
         client=client.web_client,
     )
-<<<<<<< HEAD
-=======
 
     slack_call = make_slack_api_rate_limited(client.web_client.chat_delete)
     response = slack_call(
@@ -247,4 +235,3 @@ def handle_followup_resolved_button(
         thread_ts=thread_ts,
         unfurl=False,
     )
->>>>>>> upstream/main

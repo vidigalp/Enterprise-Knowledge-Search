@@ -63,7 +63,6 @@ export const AIMessage = ({
               </div>
             </div>
 
-            <div className="font-bold text-emphasis ml-2 my-auto">Hagen</div>
 
             {query === undefined &&
               hasDocs &&
