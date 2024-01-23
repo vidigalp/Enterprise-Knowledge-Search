@@ -170,7 +170,7 @@ def thread_to_doc(
         semantic_identifier=channel["name"],
         doc_updated_at=get_latest_message_time(thread),
         title="",  # slack docs don't really have a "title"
-        metadata={},
+        metadata={"slack_channel": channel["name"]},
     )
 
 
