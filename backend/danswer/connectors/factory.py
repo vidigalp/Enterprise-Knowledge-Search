@@ -25,6 +25,7 @@ from danswer.connectors.models import InputType
 from danswer.connectors.notion.connector import NotionConnector
 from danswer.connectors.productboard.connector import ProductboardConnector
 from danswer.connectors.requesttracker.connector import RequestTrackerConnector
+from danswer.connectors.sharepoint.connector import SharepointConnector
 from danswer.connectors.slab.connector import SlabConnector
 from danswer.connectors.slack.connector import SlackLoadConnector
 from danswer.connectors.slack.connector import SlackPollConnector
@@ -68,6 +69,7 @@ def identify_connector_class(
         DocumentSource.GOOGLE_SITES: GoogleSitesConnector,
         DocumentSource.ZENDESK: ZendeskConnector,
         DocumentSource.LOOPIO: LoopioConnector,
+        DocumentSource.SHAREPOINT: SharepointConnector,
     }
     connector_by_source = connector_map.get(source, {})
 

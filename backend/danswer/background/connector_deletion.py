@@ -61,7 +61,9 @@ def _delete_connector_credential_pair_batch(
             document_id for document_id, cnt in document_connector_cnts if cnt == 1
         ]
         logger.debug(f"Deleting documents: {document_ids_to_delete}")
+
         document_index.delete(doc_ids=document_ids_to_delete)
+
         delete_documents_complete(
             db_session=db_session,
             document_ids=document_ids_to_delete,
@@ -87,7 +89,9 @@ def _delete_connector_credential_pair_batch(
             for document_id, access in access_for_documents.items()
         ]
         logger.debug(f"Updating documents: {document_ids_to_update}")
+
         document_index.update(update_requests=update_requests)
+
         delete_document_by_connector_credential_pair(
             db_session=db_session,
             document_ids=document_ids_to_update,

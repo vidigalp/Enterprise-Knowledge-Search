@@ -18,6 +18,7 @@ import {
   NotionIcon,
   ProductboardIcon,
   RequestTrackerIcon,
+  SharepointIcon,
   SlabIcon,
   SlackIcon,
   ZendeskIcon,
@@ -25,6 +26,7 @@ import {
 } from "@/components/icons/icons";
 import { ValidSources } from "./types";
 import { SourceCategory, SourceMetadata } from "./search/interfaces";
+import { Persona } from "@/app/admin/personas/interfaces";
 
 interface PartialSourceMetadata {
   icon: React.FC<{ size?: number; className?: string }>;
@@ -142,14 +144,19 @@ const SOURCE_METADATA_MAP: SourceMap = {
     displayName: "Google Sites",
     category: SourceCategory.ImportedKnowledge,
   },
-  requesttracker: {
-    icon: RequestTrackerIcon,
-    displayName: "Request Tracker",
-    category: SourceCategory.AppConnection,
-  },
   loopio: {
     icon: LoopioIcon,
     displayName: "Loopio",
+    category: SourceCategory.AppConnection,
+  },
+  sharepoint: {
+    icon: SharepointIcon,
+    displayName: "Sharepoint",
+    category: SourceCategory.AppConnection,
+  },
+  requesttracker: {
+    icon: RequestTrackerIcon,
+    displayName: "Request Tracker",
     category: SourceCategory.AppConnection,
   },
 };
@@ -179,4 +186,20 @@ export function listSourceMetadata(): SourceMetadata[] {
 
 export function getSourceDisplayName(sourceType: ValidSources): string | null {
   return getSourceMetadata(sourceType).displayName;
+}
+
+export function getSourceMetadataForSources(sources: ValidSources[]) {
+  return sources.map((source) => getSourceMetadata(source));
+}
+
+export function getSourcesForPersona(persona: Persona): ValidSources[] {
+  const personaSources: ValidSources[] = [];
+  persona.document_sets.forEach((documentSet) => {
+    documentSet.cc_pair_descriptors.forEach((ccPair) => {
+      if (!personaSources.includes(ccPair.connector.source)) {
+        personaSources.push(ccPair.connector.source);
+      }
+    });
+  });
+  return personaSources;
 }

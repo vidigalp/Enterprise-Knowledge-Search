@@ -21,6 +21,7 @@ from danswer.db.chat import get_or_create_root_message
 from danswer.db.chat import get_persona_by_id
 from danswer.db.chat import get_prompt_by_id
 from danswer.db.chat import translate_db_message_to_chat_message_detail
+from danswer.db.embedding_model import get_current_db_embedding_model
 from danswer.db.models import User
 from danswer.document_index.factory import get_default_document_index
 from danswer.indexing.models import InferenceChunk
@@ -89,7 +90,12 @@ def stream_answer_objects(
     )
 
     llm_tokenizer = get_default_llm_token_encode()
-    document_index = get_default_document_index()
+
+    embedding_model = get_current_db_embedding_model(db_session)
+
+    document_index = get_default_document_index(
+        primary_index_name=embedding_model.index_name, secondary_index_name=None
+    )
 
     # Create a chat session which will just store the root message, the query, and the AI response
     root_message = get_or_create_root_message(
@@ -120,6 +126,7 @@ def stream_answer_objects(
     documents_generator = full_chunk_search_generator(
         search_query=retrieval_request,
         document_index=document_index,
+        db_session=db_session,
         retrieval_metrics_callback=retrieval_metrics_callback,
         rerank_metrics_callback=rerank_metrics_callback,
     )

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from danswer.auth.users import current_admin_user
 from danswer.auth.users import current_user
 from danswer.configs.constants import DocumentSource
+from danswer.db.embedding_model import get_current_db_embedding_model
 from danswer.db.engine import get_session
 from danswer.db.models import User
 from danswer.db.tag import get_tags_by_value_prefix_for_source_types
@@ -52,7 +53,13 @@ def admin_search(
         time_cutoff=question.filters.time_cutoff,
         access_control_list=user_acl_filters,
     )
-    document_index = get_default_document_index()
+
+    embedding_model = get_current_db_embedding_model(db_session)
+
+    document_index = get_default_document_index(
+        primary_index_name=embedding_model.index_name, secondary_index_name=None
+    )
+
     if not isinstance(document_index, VespaIndex):
         raise HTTPException(
             status_code=400,
@@ -101,10 +108,15 @@ def get_tags(
 
 @basic_router.post("/search-intent")
 def get_search_type(
-    simple_query: SimpleQueryRequest, _: User = Depends(current_user)
+    simple_query: SimpleQueryRequest,
+    _: User = Depends(current_user),
+    db_session: Session = Depends(get_session),
 ) -> HelperResponse:
     logger.info(f"Calculating intent for {simple_query.query}")
-    return recommend_search_flow(simple_query.query)
+    embedding_model = get_current_db_embedding_model(db_session)
+    return recommend_search_flow(
+        simple_query.query, model_name=embedding_model.model_name
+    )
 
 
 @basic_router.post("/query-validation")

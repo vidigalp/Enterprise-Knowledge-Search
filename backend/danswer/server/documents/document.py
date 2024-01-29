@@ -5,6 +5,7 @@ from fastapi import Query
 from sqlalchemy.orm import Session
 
 from danswer.auth.users import current_user
+from danswer.db.embedding_model import get_current_db_embedding_model
 from danswer.db.engine import get_session
 from danswer.db.models import User
 from danswer.document_index.factory import get_default_document_index
@@ -26,7 +27,11 @@ def get_document_info(
     user: User | None = Depends(current_user),
     db_session: Session = Depends(get_session),
 ) -> DocumentInfo:
-    document_index = get_default_document_index()
+    embedding_model = get_current_db_embedding_model(db_session)
+
+    document_index = get_default_document_index(
+        primary_index_name=embedding_model.index_name, secondary_index_name=None
+    )
 
     user_acl_filters = build_access_filters_for_user(user, db_session)
     filters = IndexFilters(access_control_list=user_acl_filters)
@@ -58,7 +63,11 @@ def get_chunk_info(
     user: User | None = Depends(current_user),
     db_session: Session = Depends(get_session),
 ) -> ChunkInfo:
-    document_index = get_default_document_index()
+    embedding_model = get_current_db_embedding_model(db_session)
+
+    document_index = get_default_document_index(
+        primary_index_name=embedding_model.index_name, secondary_index_name=None
+    )
 
     user_acl_filters = build_access_filters_for_user(user, db_session)
     filters = IndexFilters(access_control_list=user_acl_filters)

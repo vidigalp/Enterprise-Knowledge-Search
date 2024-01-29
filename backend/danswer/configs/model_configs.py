@@ -11,10 +11,13 @@ CHUNK_SIZE = 512
 # https://huggingface.co/DOCUMENT_ENCODER_MODEL
 # The useable models configured as below must be SentenceTransformer compatible
 DOCUMENT_ENCODER_MODEL = (
-    os.environ.get("DOCUMENT_ENCODER_MODEL") or "thenlper/gte-small"
+    # This is not a good model anymore, but this default needs to be kept for not breaking existing
+    # deployments, will eventually be retired/swapped for a different default model
+    os.environ.get("DOCUMENT_ENCODER_MODEL")
+    or "thenlper/gte-small"
 )
 # If the below is changed, Vespa deployment must also be changed
-DOC_EMBEDDING_DIM = 384
+DOC_EMBEDDING_DIM = int(os.environ.get("DOC_EMBEDDING_DIM") or 384)
 # Model should be chosen with 512 context size, ideally don't change this
 DOC_EMBEDDING_CONTEXT_SIZE = 512
 NORMALIZE_EMBEDDINGS = (

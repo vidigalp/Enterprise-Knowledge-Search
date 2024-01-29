@@ -57,7 +57,7 @@ def update_document_boost(
         boost=boost,
     )
 
-    document_index.update([update])
+    document_index.update(update_requests=[update])
 
     db_session.commit()
 
@@ -77,7 +77,7 @@ def update_document_hidden(
         hidden=hidden,
     )
 
-    document_index.update([update])
+    document_index.update(update_requests=[update])
 
     db_session.commit()
 
@@ -123,7 +123,7 @@ def create_doc_retrieval_feedback(
             document_ids=[document_id], boost=db_doc.boost, hidden=db_doc.hidden
         )
         # Updates are generally batched for efficiency, this case only 1 doc/value is updated
-        document_index.update([update])
+        document_index.update(update_requests=[update])
 
     db_session.add(retrieval_feedback)
     db_session.commit()
