@@ -157,17 +157,23 @@ def thread_to_doc(
 ) -> Document:
     channel_id = channel["id"]
 
-    # Define the regular expression pattern
-    pattern = r'^ce\d+-([a-zA-Z0-9]+)-.*'
+    # Define the regular expression patterns
+    patterns = {
+        'ce': r'^ce\d+-([a-zA-Z0-9]+)-.*',
+        'internal': r'internal-([a-zA-Z0-9\-]+)',
+        'yb-support': r'yb-support-([a-zA-Z0-9\-]+)'
+    }
 
     # Initialize an empty client name
-    client_name = None
+    client_name = ""
 
-    # Search for the pattern in the first message of the thread
-    match = re.search(pattern, thread[0]['text'])
-    if match:
-        # Extract the company name
-        client_name = match.group(1)
+    # Search for the patterns in the first message of the thread
+    for key, pattern in patterns.items():
+        match = re.search(pattern, thread[0]['text'])
+        if match:
+            # Extract the company name
+            client_name = match.group(1)
+            break  # Stop searching after the first match
 
     return Document(
         id=f"{channel_id}__{thread[0]['ts']}",
@@ -185,7 +191,7 @@ def thread_to_doc(
         doc_updated_at=get_latest_message_time(thread),
         title="",  # slack docs don't really have a "title"
         metadata={"slack_channel": channel["name"],
-                  "client": client_name if client_name else None},
+                  "client": client_name},
     )
 
 
