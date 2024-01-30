@@ -160,8 +160,8 @@ def thread_to_doc(
     # Define the regular expression patterns
     patterns = {
         'ce': r'^ce\d+-([a-zA-Z0-9]+)-.*',
-        'internal': r'internal-([a-zA-Z0-9\-]+)',
-        'yb-support': r'yb-support-([a-zA-Z0-9\-]+)'
+        'internal': r'internal-(*)',
+        'yb-support': r'yb-support-(*)'
     }
 
     # Initialize an empty client name
