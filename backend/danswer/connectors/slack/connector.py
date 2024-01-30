@@ -156,25 +156,6 @@ def thread_to_doc(
     slack_cleaner: SlackTextCleaner,
 ) -> Document:
     channel_id = channel["id"]
-
-    # Define the regular expression patterns
-    patterns = {
-        'ce': r'^ce\d+-([a-zA-Z0-9]+)-.*',
-        'internal': r'internal-(*)',
-        'yb-support': r'yb-support-(*)'
-    }
-
-    # Initialize an empty client name
-    client_name = ""
-
-    # Search for the patterns in the first message of the thread
-    for key, pattern in patterns.items():
-        match = re.search(pattern, thread[0]['text'])
-        if match:
-            # Extract the company name
-            client_name = match.group(1)
-            break  # Stop searching after the first match
-
     return Document(
         id=f"{channel_id}__{thread[0]['ts']}",
         sections=[
@@ -190,8 +171,7 @@ def thread_to_doc(
         semantic_identifier=channel["name"],
         doc_updated_at=get_latest_message_time(thread),
         title="",  # slack docs don't really have a "title"
-        metadata={"slack_channel": channel["name"],
-                  "client": client_name},
+        metadata={},
     )
 
 
