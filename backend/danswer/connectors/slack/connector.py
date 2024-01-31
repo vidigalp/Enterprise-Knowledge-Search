@@ -156,6 +156,17 @@ def thread_to_doc(
     slack_cleaner: SlackTextCleaner,
 ) -> Document:
     channel_id = channel["id"]
+
+    # Define regex pattern to match both 'internal-' and 'ce###-' patterns
+    pattern = r'(?:internal-|ce\d+-)([^-]+)'
+    match = re.search(pattern, channel["name"])
+    
+    # Extract client name from the match, if any
+    client_name = match.group(1) if match else ""
+
+    # Create metadata dictionary, include client name if extracted
+    metadata = {'client_name': client_name} if client_name else {}
+
     return Document(
         id=f"{channel_id}__{thread[0]['ts']}",
         sections=[
@@ -171,7 +182,7 @@ def thread_to_doc(
         semantic_identifier=channel["name"],
         doc_updated_at=get_latest_message_time(thread),
         title="",  # slack docs don't really have a "title"
-        metadata={},
+        metadata=metadata,  # Use the metadata with client name,
     )
 
 
