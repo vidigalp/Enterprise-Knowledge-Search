@@ -158,14 +158,15 @@ def thread_to_doc(
     channel_id = channel["id"]
 
     # Define regex pattern to match both 'internal-' and 'ce###-' patterns
-    pattern = r'(?:internal-|?:yb-support-|ce\d+-)([^-]+)'
+    # The '?' after '\d' makes the digits optional, preventing 'nothing to repeat' error
+    pattern = r'(?:internal-|ce\d*?-)([^-]+)'
     match = re.search(pattern, channel["name"])
     
     # Extract client name from the match, if any
     client_name = match.group(1) if match else ""
 
     # Create metadata dictionary, include client name if extracted
-    metadata = {'client': client_name} if client_name else {}
+    metadata = {'client_name': client_name} if client_name else {}
 
     return Document(
         id=f"{channel_id}__{thread[0]['ts']}",
