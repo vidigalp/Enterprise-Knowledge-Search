@@ -207,12 +207,8 @@ def thread_to_doc(
         semantic_identifier=doc_sem_id,
         doc_updated_at=get_latest_message_time(thread),
         title="",  # slack docs don't really have a "title"
-<<<<<<< HEAD
-        metadata=metadata,  # Use the metadata with client name,
-=======
         primary_owners=valid_experts,
         metadata={"Channel": channel["name"]},
->>>>>>> upstream/main
     )
 
 
