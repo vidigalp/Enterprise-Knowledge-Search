@@ -1,6 +1,7 @@
 import re
 from collections.abc import Callable
 from collections.abc import Iterator
+from datetime import datetime
 from functools import lru_cache
 from typing import cast
 
@@ -13,16 +14,18 @@ from danswer.chat.models import CitationInfo
 from danswer.chat.models import DanswerAnswerPiece
 from danswer.chat.models import LlmDoc
 from danswer.configs.chat_configs import MULTILINGUAL_QUERY_EXPANSION
-from danswer.configs.chat_configs import NUM_DOCUMENT_TOKENS_FED_TO_GENERATIVE_MODEL
 from danswer.configs.chat_configs import STOP_STREAM_PAT
+from danswer.configs.constants import DocumentSource
 from danswer.configs.constants import IGNORE_FOR_QA
-from danswer.configs.model_configs import GEN_AI_HISTORY_CUTOFF
-from danswer.configs.model_configs import GEN_AI_MAX_INPUT_TOKENS
+from danswer.configs.model_configs import GEN_AI_MODEL_VERSION
+from danswer.configs.model_configs import GEN_AI_SINGLE_USER_MESSAGE_EXPECTED_MAX_TOKENS
 from danswer.db.chat import get_chat_messages_by_session
 from danswer.db.models import ChatMessage
+from danswer.db.models import Persona
 from danswer.db.models import Prompt
 from danswer.indexing.models import InferenceChunk
 from danswer.llm.utils import check_number_of_tokens
+from danswer.llm.utils import get_max_input_tokens
 from danswer.prompts.chat_prompts import CHAT_USER_CONTEXT_FREE_PROMPT
 from danswer.prompts.chat_prompts import CHAT_USER_PROMPT
 from danswer.prompts.chat_prompts import CITATION_REMINDER
@@ -33,6 +36,12 @@ from danswer.prompts.constants import CODE_BLOCK_PAT
 from danswer.prompts.constants import TRIPLE_BACKTICK
 from danswer.prompts.direct_qa_prompts import LANGUAGE_HINT
 from danswer.prompts.prompt_utils import get_current_llm_day_time
+from danswer.prompts.token_counts import (
+    CHAT_USER_PROMPT_WITH_CONTEXT_OVERHEAD_TOKEN_CNT,
+)
+from danswer.prompts.token_counts import CITATION_REMINDER_TOKEN_CNT
+from danswer.prompts.token_counts import CITATION_STATEMENT_TOKEN_CNT
+from danswer.prompts.token_counts import LANGUAGE_HINT_TOKEN_CNT
 
 # Maps connector enum string to a more natural language representation for the LLM
 # If not on the list, uses the original but slightly cleaned up, see below
@@ -50,19 +59,49 @@ def clean_up_source(source_str: str) -> str:
     return source_str.replace("_", " ").title()
 
 
-def build_context_str(
+def build_doc_context_str(
+    semantic_identifier: str,
+    source_type: DocumentSource,
+    content: str,
+    metadata_dict: dict[str, str | list[str]],
+    updated_at: datetime | None,
+    ind: int,
+    include_metadata: bool = True,
+) -> str:
+    context_str = ""
+    if include_metadata:
+        context_str += f"DOCUMENT {ind}: {semantic_identifier}\n"
+        context_str += f"Source: {clean_up_source(source_type)}\n"
+
+        for k, v in metadata_dict.items():
+            if isinstance(v, list):
+                v_str = ", ".join(v)
+                context_str += f"{k.capitalize()}: {v_str}\n"
+            else:
+                context_str += f"{k.capitalize()}: {v}\n"
+
+        if updated_at:
+            update_str = updated_at.strftime("%B %d, %Y %H:%M")
+            context_str += f"Updated: {update_str}\n"
+    context_str += f"{CODE_BLOCK_PAT.format(content.strip())}\n\n\n"
+    return context_str
+
+
+def build_complete_context_str(
     context_docs: list[LlmDoc | InferenceChunk],
     include_metadata: bool = True,
 ) -> str:
     context_str = ""
     for ind, doc in enumerate(context_docs, start=1):
-        if include_metadata:
-            context_str += f"DOCUMENT {ind}: {doc.semantic_identifier}\n"
-            context_str += f"Source: {clean_up_source(doc.source_type)}\n"
-            if doc.updated_at:
-                update_str = doc.updated_at.strftime("%B %d, %Y %H:%M")
-                context_str += f"Updated: {update_str}\n"
-        context_str += f"{CODE_BLOCK_PAT.format(doc.content.strip())}\n\n\n"
+        context_str += build_doc_context_str(
+            semantic_identifier=doc.semantic_identifier,
+            source_type=doc.source_type,
+            content=doc.content,
+            metadata_dict=doc.metadata,
+            updated_at=doc.updated_at,
+            ind=ind,
+            include_metadata=include_metadata,
+        )
 
     return context_str.strip()
 
@@ -71,7 +110,7 @@ def build_context_str(
 def build_chat_system_message(
     prompt: Prompt,
     context_exists: bool,
-    llm_tokenizer: Callable,
+    llm_tokenizer_encode_func: Callable,
     citation_line: str = REQUIRE_CITATION_STATEMENT,
     no_citation_line: str = NO_CITATION_STATEMENT,
 ) -> tuple[SystemMessage | None, int]:
@@ -92,7 +131,7 @@ def build_chat_system_message(
     if not system_prompt:
         return None, 0
 
-    token_count = len(llm_tokenizer(system_prompt))
+    token_count = len(llm_tokenizer_encode_func(system_prompt))
     system_msg = SystemMessage(content=system_prompt)
 
     return system_msg, token_count
@@ -116,6 +155,7 @@ def llm_doc_from_inference_chunk(inf_chunk: InferenceChunk) -> LlmDoc:
         content=inf_chunk.content,
         semantic_identifier=inf_chunk.semantic_identifier,
         source_type=inf_chunk.source_type,
+        metadata=inf_chunk.metadata,
         updated_at=inf_chunk.updated_at,
         link=inf_chunk.source_links[0] if inf_chunk.source_links else None,
     )
@@ -138,7 +178,7 @@ def build_chat_user_message(
     chat_message: ChatMessage,
     prompt: Prompt,
     context_docs: list[LlmDoc],
-    llm_tokenizer: Callable,
+    llm_tokenizer_encode_func: Callable,
     all_doc_useful: bool,
     user_prompt_template: str = CHAT_USER_PROMPT,
     context_free_template: str = CHAT_USER_CONTEXT_FREE_PROMPT,
@@ -156,11 +196,11 @@ def build_chat_user_message(
             else user_query
         )
         user_prompt = user_prompt.strip()
-        token_count = len(llm_tokenizer(user_prompt))
+        token_count = len(llm_tokenizer_encode_func(user_prompt))
         user_msg = HumanMessage(content=user_prompt)
         return user_msg, token_count
 
-    context_docs_str = build_context_str(
+    context_docs_str = build_complete_context_str(
         cast(list[LlmDoc | InferenceChunk], context_docs)
     )
     optional_ignore = "" if all_doc_useful else ignore_str
@@ -175,7 +215,7 @@ def build_chat_user_message(
     )
 
     user_prompt = user_prompt.strip()
-    token_count = len(llm_tokenizer(user_prompt))
+    token_count = len(llm_tokenizer_encode_func(user_prompt))
     user_msg = HumanMessage(content=user_prompt)
 
     return user_msg, token_count
@@ -207,7 +247,7 @@ def _get_usable_chunks(
 
 def get_usable_chunks(
     chunks: list[InferenceChunk],
-    token_limit: int = NUM_DOCUMENT_TOKENS_FED_TO_GENERATIVE_MODEL,
+    token_limit: int,
     offset: int = 0,
 ) -> list[InferenceChunk]:
     offset_into_chunks = 0
@@ -229,7 +269,7 @@ def get_usable_chunks(
 def get_chunks_for_qa(
     chunks: list[InferenceChunk],
     llm_chunk_selection: list[bool],
-    token_limit: float | None = NUM_DOCUMENT_TOKENS_FED_TO_GENERATIVE_MODEL,
+    token_limit: int | None,
     batch_offset: int = 0,
 ) -> list[int]:
     """
@@ -331,10 +371,10 @@ def create_chat_chain(
 
 def combine_message_chain(
     messages: list[ChatMessage],
-    msg_limit: int | None = 10,
-    token_limit: int | None = GEN_AI_HISTORY_CUTOFF,
+    token_limit: int,
+    msg_limit: int | None = None,
 ) -> str:
-    """Used for secondary LLM flows that require the chat history"""
+    """Used for secondary LLM flows that require the chat history,"""
     message_strs: list[str] = []
     total_token_count = 0
 
@@ -344,10 +384,7 @@ def combine_message_chain(
     for message in reversed(messages):
         message_token_count = message.token_count
 
-        if (
-            token_limit is not None
-            and total_token_count + message_token_count > token_limit
-        ):
+        if total_token_count + message_token_count > token_limit:
             break
 
         role = message.message_type.value.upper()
@@ -357,16 +394,17 @@ def combine_message_chain(
     return "\n\n".join(message_strs)
 
 
-def find_last_index(
-    lst: list[int], max_prompt_tokens: int = GEN_AI_MAX_INPUT_TOKENS
-) -> int:
+_PER_MESSAGE_TOKEN_BUFFER = 7
+
+
+def find_last_index(lst: list[int], max_prompt_tokens: int) -> int:
     """From the back, find the index of the last element to include
     before the list exceeds the maximum"""
     running_sum = 0
 
     last_ind = 0
     for i in range(len(lst) - 1, -1, -1):
-        running_sum += lst[i]
+        running_sum += lst[i] + _PER_MESSAGE_TOKEN_BUFFER
         if running_sum > max_prompt_tokens:
             last_ind = i + 1
             break
@@ -382,14 +420,11 @@ def drop_messages_history_overflow(
     history_token_counts: list[int],
     final_msg: BaseMessage,
     final_msg_token_count: int,
-    max_allowed_tokens: int | None,
+    max_allowed_tokens: int,
 ) -> list[BaseMessage]:
     """As message history grows, messages need to be dropped starting from the furthest in the past.
     The System message should be kept if at all possible and the latest user input which is inserted in the
     prompt template must be included"""
-    if max_allowed_tokens is None:
-        max_allowed_tokens = GEN_AI_MAX_INPUT_TOKENS
-
     if len(history_msgs) != len(history_token_counts):
         # This should never happen
         raise ValueError("Need exactly 1 token count per message for tracking overflow")
@@ -508,3 +543,69 @@ def extract_citations_from_stream(
             yield DanswerAnswerPiece(answer_piece="[" + curr_segment)
         else:
             yield DanswerAnswerPiece(answer_piece=curr_segment)
+
+
+def get_prompt_tokens(prompt: Prompt) -> int:
+    return (
+        check_number_of_tokens(prompt.system_prompt)
+        + check_number_of_tokens(prompt.task_prompt)
+        + CHAT_USER_PROMPT_WITH_CONTEXT_OVERHEAD_TOKEN_CNT
+        + CITATION_STATEMENT_TOKEN_CNT
+        + CITATION_REMINDER_TOKEN_CNT
+        + (LANGUAGE_HINT_TOKEN_CNT if bool(MULTILINGUAL_QUERY_EXPANSION) else 0)
+    )
+
+
+# buffer just to be safe so that we don't overflow the token limit due to
+# a small miscalculation
+_MISC_BUFFER = 40
+
+
+def compute_max_document_tokens(
+    persona: Persona,
+    actual_user_input: str | None = None,
+    max_llm_token_override: int | None = None,
+) -> int:
+    """Estimates the number of tokens available for context documents. Formula is roughly:
+
+    (
+        model_context_window - reserved_output_tokens - prompt_tokens
+        - (actual_user_input OR reserved_user_message_tokens) - buffer (just to be safe)
+    )
+
+    The actual_user_input is used at query time. If we are calculating this before knowing the exact input (e.g.
+    if we're trying to determine if the user should be able to select another document) then we just set an
+    arbitrary "upper bound".
+    """
+    llm_name = GEN_AI_MODEL_VERSION
+    if persona.llm_model_version_override:
+        llm_name = persona.llm_model_version_override
+
+    # if we can't find a number of tokens, just assume some common default
+    max_input_tokens = (
+        max_llm_token_override
+        if max_llm_token_override
+        else get_max_input_tokens(model_name=llm_name)
+    )
+    if persona.prompts:
+        # TODO this may not always be the first prompt
+        prompt_tokens = get_prompt_tokens(persona.prompts[0])
+    else:
+        raise RuntimeError("Persona has no prompts - this should never happen")
+    user_input_tokens = (
+        check_number_of_tokens(actual_user_input)
+        if actual_user_input is not None
+        else GEN_AI_SINGLE_USER_MESSAGE_EXPECTED_MAX_TOKENS
+    )
+
+    return max_input_tokens - prompt_tokens - user_input_tokens - _MISC_BUFFER
+
+
+def compute_max_llm_input_tokens(persona: Persona) -> int:
+    """Maximum tokens allows in the input to the LLM (of any type)."""
+    llm_name = GEN_AI_MODEL_VERSION
+    if persona.llm_model_version_override:
+        llm_name = persona.llm_model_version_override
+
+    input_tokens = get_max_input_tokens(model_name=llm_name)
+    return input_tokens - _MISC_BUFFER

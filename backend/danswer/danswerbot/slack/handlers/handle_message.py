@@ -11,14 +11,17 @@ from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from sqlalchemy.orm import Session
 
+from danswer.chat.chat_utils import compute_max_document_tokens
 from danswer.configs.danswerbot_configs import DANSWER_BOT_ANSWER_GENERATION_TIMEOUT
 from danswer.configs.danswerbot_configs import DANSWER_BOT_DISABLE_COT
 from danswer.configs.danswerbot_configs import DANSWER_BOT_DISABLE_DOCS_ONLY_ANSWER
 from danswer.configs.danswerbot_configs import DANSWER_BOT_DISPLAY_ERROR_MSGS
 from danswer.configs.danswerbot_configs import DANSWER_BOT_NUM_RETRIES
+from danswer.configs.danswerbot_configs import DANSWER_BOT_TARGET_CHUNK_PERCENTAGE
 from danswer.configs.danswerbot_configs import DANSWER_REACT_EMOJI
 from danswer.configs.danswerbot_configs import DISABLE_DANSWER_BOT_FILTER_DETECT
 from danswer.configs.danswerbot_configs import ENABLE_DANSWERBOT_REFLEXION
+from danswer.configs.model_configs import GEN_AI_MODEL_VERSION
 from danswer.danswerbot.slack.blocks import build_documents_blocks
 from danswer.danswerbot.slack.blocks import build_follow_up_block
 from danswer.danswerbot.slack.blocks import build_qa_response_blocks
@@ -28,10 +31,13 @@ from danswer.danswerbot.slack.models import SlackMessageInfo
 from danswer.danswerbot.slack.utils import ChannelIdAdapter
 from danswer.danswerbot.slack.utils import fetch_userids_from_emails
 from danswer.danswerbot.slack.utils import respond_in_thread
+from danswer.danswerbot.slack.utils import slack_usage_report
 from danswer.danswerbot.slack.utils import SlackRateLimiter
 from danswer.danswerbot.slack.utils import update_emote_react
 from danswer.db.engine import get_sqlalchemy_engine
 from danswer.db.models import SlackBotConfig
+from danswer.llm.utils import check_number_of_tokens
+from danswer.llm.utils import get_max_input_tokens
 from danswer.one_shot_answer.answer_question import get_search_answer
 from danswer.one_shot_answer.models import DirectQARequest
 from danswer.one_shot_answer.models import OneShotQAResponse
@@ -39,8 +45,6 @@ from danswer.search.models import BaseFilters
 from danswer.search.models import OptionalSearchSetting
 from danswer.search.models import RetrievalDetails
 from danswer.utils.logger import setup_logger
-from danswer.utils.telemetry import optional_telemetry
-from danswer.utils.telemetry import RecordType
 
 logger_base = setup_logger()
 
@@ -99,6 +103,7 @@ def handle_message(
     disable_auto_detect_filters: bool = DISABLE_DANSWER_BOT_FILTER_DETECT,
     reflexion: bool = ENABLE_DANSWERBOT_REFLEXION,
     disable_cot: bool = DANSWER_BOT_DISABLE_COT,
+    thread_context_percent: float = DANSWER_BOT_TARGET_CHUNK_PERCENTAGE,
 ) -> bool:
     """Potentially respond to the user message depending on filters and if an answer was generated
 
@@ -120,8 +125,6 @@ def handle_message(
     bypass_filters = message_info.bypass_filters
     is_bot_msg = message_info.is_bot_msg
     is_bot_dm = message_info.is_bot_dm
-
-    engine = get_sqlalchemy_engine()
 
     document_set_names: list[str] | None = None
     persona = channel_config.persona if channel_config else None
@@ -215,16 +218,43 @@ def handle_message(
             action = "slack_tag_message"
         elif is_bot_dm:
             action = "slack_dm_message"
-        optional_telemetry(
-            record_type=RecordType.USAGE,
-            data={"action": action},
-        )
 
-        with Session(engine, expire_on_commit=False) as db_session:
+        slack_usage_report(action=action, sender_id=sender_id, client=client)
+
+        max_document_tokens: int | None = None
+        max_history_tokens: int | None = None
+        if len(new_message_request.messages) > 1:
+            llm_name = GEN_AI_MODEL_VERSION
+            if persona and persona.llm_model_version_override:
+                llm_name = persona.llm_model_version_override
+
+            # In cases of threads, split the available tokens between docs and thread context
+            input_tokens = get_max_input_tokens(model_name=llm_name)
+            max_history_tokens = int(input_tokens * thread_context_percent)
+
+            remaining_tokens = input_tokens - max_history_tokens
+
+            query_text = new_message_request.messages[0].message
+            if persona:
+                max_document_tokens = compute_max_document_tokens(
+                    persona=persona,
+                    actual_user_input=query_text,
+                    max_llm_token_override=remaining_tokens,
+                )
+            else:
+                max_document_tokens = (
+                    remaining_tokens
+                    - 512  # Needs to be more than any of the QA prompts
+                    - check_number_of_tokens(query_text)
+                )
+
+        with Session(get_sqlalchemy_engine()) as db_session:
             # This also handles creating the query event in postgres
             answer = get_search_answer(
                 query_req=new_message_request,
                 user=None,
+                max_document_tokens=max_document_tokens,
+                max_history_tokens=max_history_tokens,
                 db_session=db_session,
                 answer_generation_timeout=answer_generation_timeout,
                 enable_reflexion=reflexion,

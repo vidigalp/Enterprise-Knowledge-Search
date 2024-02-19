@@ -3,7 +3,7 @@ from typing import cast
 import yaml
 from sqlalchemy.orm import Session
 
-from danswer.configs.chat_configs import DEFAULT_NUM_CHUNKS_FED_TO_CHAT
+from danswer.configs.chat_configs import MAX_CHUNKS_FED_TO_CHAT
 from danswer.configs.chat_configs import PERSONAS_YAML
 from danswer.configs.chat_configs import PROMPTS_YAML
 from danswer.db.chat import get_prompt_by_name
@@ -42,7 +42,7 @@ def load_prompts_from_yaml(prompts_yaml: str = PROMPTS_YAML) -> None:
 
 def load_personas_from_yaml(
     personas_yaml: str = PERSONAS_YAML,
-    default_chunks: float = DEFAULT_NUM_CHUNKS_FED_TO_CHAT,
+    default_chunks: float = MAX_CHUNKS_FED_TO_CHAT,
 ) -> None:
     with open(personas_yaml, "r") as file:
         data = yaml.safe_load(file)
@@ -78,9 +78,11 @@ def load_personas_from_yaml(
                 if not prompts:
                     prompts = None
 
+            p_id = persona.get("id")
             upsert_persona(
                 user_id=None,
-                persona_id=persona.get("id"),
+                # Negative to not conflict with existing personas
+                persona_id=(-1 * p_id) if p_id is not None else None,
                 name=persona["name"],
                 description=persona["description"],
                 num_chunks=persona.get("num_chunks")

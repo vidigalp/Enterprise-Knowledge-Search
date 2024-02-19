@@ -419,13 +419,18 @@ class IndexAttempt(Base):
         ForeignKey("credential.id"),
         nullable=True,
     )
+    # Some index attempts that run from beginning will still have this as False
+    # This is only for attempts that are explicitly marked as from the start via
+    # the run once API
+    from_beginning: Mapped[bool] = mapped_column(Boolean)
     status: Mapped[IndexingStatus] = mapped_column(Enum(IndexingStatus))
     # The two below may be slightly out of sync if user switches Embedding Model
     new_docs_indexed: Mapped[int | None] = mapped_column(Integer, default=0)
     total_docs_indexed: Mapped[int | None] = mapped_column(Integer, default=0)
-    error_msg: Mapped[str | None] = mapped_column(
-        Text, default=None
-    )  # only filled if status = "failed"
+    # only filled if status = "failed"
+    error_msg: Mapped[str | None] = mapped_column(Text, default=None)
+    # only filled if status = "failed" AND an unhandled exception caused the failure
+    full_exception_trace: Mapped[str | None] = mapped_column(Text, default=None)
     # Nullable because in the past, we didn't allow swapping out embedding models live
     embedding_model_id: Mapped[int] = mapped_column(
         ForeignKey("embedding_model.id"),
@@ -723,7 +728,6 @@ class Persona(Base):
         Enum(SearchType), default=SearchType.HYBRID
     )
     # Number of chunks to pass to the LLM for generation.
-    # If unspecified, uses the default DEFAULT_NUM_CHUNKS_FED_TO_CHAT set in the env variable
     num_chunks: Mapped[float | None] = mapped_column(Float, nullable=True)
     # Pass every chunk through LLM for evaluation, fairly expensive
     # Can be turned off globally by admin, in which case, this setting is ignored
@@ -786,6 +790,7 @@ class ChannelConfig(TypedDict):
 
     channel_names: list[str]
     respond_tag_only: NotRequired[bool]  # defaults to False
+    respond_to_bots: NotRequired[bool]  # defaults to False
     respond_team_member_list: NotRequired[list[str]]
     answer_filters: NotRequired[list[AllowedAnswerFilters]]
     # If None then no follow up

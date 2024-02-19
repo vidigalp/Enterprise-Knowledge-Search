@@ -13,6 +13,7 @@ import { DanswerDocument } from "@/lib/search/interfaces";
 import { SearchSummary, ShowHideDocsButton } from "./SearchSummary";
 import { SourceIcon } from "@/components/SourceIcon";
 import { ThreeDots } from "react-loader-spinner";
+import { SkippedSearch } from "./SkippedSearch";
 
 export const Hoverable: React.FC<{
   children: JSX.Element;
@@ -39,6 +40,8 @@ export const AIMessage = ({
   isCurrentlyShowingRetrieved,
   handleShowRetrieved,
   handleSearchQueryEdit,
+  handleForceSearch,
+  retrievalDisabled,
 }: {
   messageId: number | null;
   content: string | JSX.Element;
@@ -50,6 +53,8 @@ export const AIMessage = ({
   isCurrentlyShowingRetrieved?: boolean;
   handleShowRetrieved?: (messageNumber: number | null) => void;
   handleSearchQueryEdit?: (query: string) => void;
+  handleForceSearch?: () => void;
+  retrievalDisabled?: boolean;
 }) => {
   const [copyClicked, setCopyClicked] = useState(false);
   return (
@@ -67,7 +72,8 @@ export const AIMessage = ({
             {query === undefined &&
               hasDocs &&
               handleShowRetrieved !== undefined &&
-              isCurrentlyShowingRetrieved !== undefined && (
+              isCurrentlyShowingRetrieved !== undefined &&
+              !retrievalDisabled && (
                 <div className="flex w-message-xs 2xl:w-message-sm 3xl:w-message-default absolute ml-8">
                   <div className="ml-auto">
                     <ShowHideDocsButton
@@ -83,7 +89,8 @@ export const AIMessage = ({
           <div className="w-message-xs 2xl:w-message-sm 3xl:w-message-default break-words mt-1 ml-8">
             {query !== undefined &&
               handleShowRetrieved !== undefined &&
-              isCurrentlyShowingRetrieved !== undefined && (
+              isCurrentlyShowingRetrieved !== undefined &&
+              !retrievalDisabled && (
                 <div className="my-1">
                   <SearchSummary
                     query={query}
@@ -93,6 +100,15 @@ export const AIMessage = ({
                     handleShowRetrieved={handleShowRetrieved}
                     handleSearchQueryEdit={handleSearchQueryEdit}
                   />
+                </div>
+              )}
+            {handleForceSearch &&
+              content &&
+              query === undefined &&
+              !hasDocs &&
+              !retrievalDisabled && (
+                <div className="my-1">
+                  <SkippedSearch handleForceSearch={handleForceSearch} />
                 </div>
               )}
 

@@ -46,8 +46,8 @@ MASK_CREDENTIAL_PREFIX = (
 
 SECRET = os.environ.get("SECRET", "")
 SESSION_EXPIRE_TIME_SECONDS = int(
-    os.environ.get("SESSION_EXPIRE_TIME_SECONDS") or 86400
-)  # 1 day
+    os.environ.get("SESSION_EXPIRE_TIME_SECONDS") or 86400 * 7
+)  # 7 days
 
 # set `VALID_EMAIL_DOMAINS` to a comma seperated list of domains in order to
 # restrict access to Danswer to only users with emails from those domains.
@@ -119,8 +119,14 @@ POSTGRES_DB = os.environ.get("POSTGRES_DB") or "postgres"
 #####
 POLL_CONNECTOR_OFFSET = 30  # Minutes overlap between poll windows
 
+# Some calls to get information on expert users are quite costly especially with rate limiting
+# Since experts are not used in the actual user experience, currently it is turned off
+# for some connectors
+ENABLE_EXPENSIVE_EXPERT_CALLS = False
+
 GOOGLE_DRIVE_INCLUDE_SHARED = False
 GOOGLE_DRIVE_FOLLOW_SHORTCUTS = False
+GOOGLE_DRIVE_ONLY_ORG_PUBLIC = False
 
 FILE_CONNECTOR_TMP_STORAGE_PATH = os.environ.get(
     "FILE_CONNECTOR_TMP_STORAGE_PATH", "/home/file_connector_storage"
@@ -171,6 +177,11 @@ EXPERIMENTAL_CHECKPOINTING_ENABLED = (
 CONTINUE_ON_CONNECTOR_FAILURE = os.environ.get(
     "CONTINUE_ON_CONNECTOR_FAILURE", ""
 ).lower() not in ["false", ""]
+# When swapping to a new embedding model, a secondary index is created in the background, to conserve
+# resources, we pause updates on the primary index by default while the secondary index is created
+DISABLE_INDEX_UPDATE_ON_SWAP = (
+    os.environ.get("DISABLE_INDEX_UPDATE_ON_SWAP", "").lower() == "true"
+)
 # Controls how many worker processes we spin up to index documents in the
 # background. This is useful for speeding up indexing, but does require a
 # fairly large amount of memory in order to increase substantially, since

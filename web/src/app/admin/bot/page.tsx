@@ -232,7 +232,6 @@ const Main = () => {
           <Button
             onClick={() => {
               setSlackBotTokensModalIsOpen(!slackBotTokensModalIsOpen);
-              console.log(slackBotTokensModalIsOpen);
             }}
             color="blue"
             size="xs"

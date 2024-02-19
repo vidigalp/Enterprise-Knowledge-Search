@@ -30,14 +30,15 @@ services:
       - EMAIL_FROM=${EMAIL_FROM:-}
       # Gen AI Settings
       - GEN_AI_MODEL_PROVIDER=${GEN_AI_MODEL_PROVIDER:-openai}
-      - GEN_AI_MODEL_VERSION=${GEN_AI_MODEL_VERSION:-gpt-3.5-turbo}
-      - FAST_GEN_AI_MODEL_VERSION=${FAST_GEN_AI_MODEL_VERSION:-gpt-3.5-turbo}
+      - GEN_AI_MODEL_VERSION=${GEN_AI_MODEL_VERSION:-gpt-3.5-turbo-16k-0613}
+      - FAST_GEN_AI_MODEL_VERSION=${FAST_GEN_AI_MODEL_VERSION:-gpt-3.5-turbo-16k-0613}
       - GEN_AI_API_KEY=${GEN_AI_API_KEY:-}
       - GEN_AI_API_ENDPOINT=${GEN_AI_API_ENDPOINT:-}
       - GEN_AI_API_VERSION=${GEN_AI_API_VERSION:-}
       - GEN_AI_LLM_PROVIDER_TYPE=${GEN_AI_LLM_PROVIDER_TYPE:-}
+      - GEN_AI_MAX_TOKENS=${GEN_AI_MAX_TOKENS:-}
       - QA_TIMEOUT=${QA_TIMEOUT:-}
-      - NUM_DOCUMENT_TOKENS_FED_TO_GENERATIVE_MODEL=${NUM_DOCUMENT_TOKENS_FED_TO_GENERATIVE_MODEL:-}
+      - MAX_CHUNKS_FED_TO_CHAT=${MAX_CHUNKS_FED_TO_CHAT:-}
       - DISABLE_LLM_FILTER_EXTRACTION=${DISABLE_LLM_FILTER_EXTRACTION:-}
       - DISABLE_LLM_CHUNK_FILTER=${DISABLE_LLM_CHUNK_FILTER:-}
       - DISABLE_LLM_CHOOSE_SEARCH=${DISABLE_LLM_CHOOSE_SEARCH:-}
@@ -93,14 +94,15 @@ services:
     environment:
       # Gen AI Settings (Needed by DanswerBot)
       - GEN_AI_MODEL_PROVIDER=${GEN_AI_MODEL_PROVIDER:-openai}
-      - GEN_AI_MODEL_VERSION=${GEN_AI_MODEL_VERSION:-gpt-3.5-turbo}
-      - FAST_GEN_AI_MODEL_VERSION=${FAST_GEN_AI_MODEL_VERSION:-gpt-3.5-turbo}
+      - GEN_AI_MODEL_VERSION=${GEN_AI_MODEL_VERSION:-gpt-3.5-turbo-16k-0613}
+      - FAST_GEN_AI_MODEL_VERSION=${FAST_GEN_AI_MODEL_VERSION:-gpt-3.5-turbo-16k-0613}
       - GEN_AI_API_KEY=${GEN_AI_API_KEY:-}
       - GEN_AI_API_ENDPOINT=${GEN_AI_API_ENDPOINT:-}
       - GEN_AI_API_VERSION=${GEN_AI_API_VERSION:-}
       - GEN_AI_LLM_PROVIDER_TYPE=${GEN_AI_LLM_PROVIDER_TYPE:-}
+      - GEN_AI_MAX_TOKENS=${GEN_AI_MAX_TOKENS:-}
       - QA_TIMEOUT=${QA_TIMEOUT:-}
-      - NUM_DOCUMENT_TOKENS_FED_TO_GENERATIVE_MODEL=${NUM_DOCUMENT_TOKENS_FED_TO_GENERATIVE_MODEL:-}
+      - MAX_CHUNKS_FED_TO_CHAT=${MAX_CHUNKS_FED_TO_CHAT:-}
       - DISABLE_LLM_FILTER_EXTRACTION=${DISABLE_LLM_FILTER_EXTRACTION:-}
       - DISABLE_LLM_CHUNK_FILTER=${DISABLE_LLM_CHUNK_FILTER:-}
       - DISABLE_LLM_CHOOSE_SEARCH=${DISABLE_LLM_CHOOSE_SEARCH:-}
@@ -113,6 +115,9 @@ services:
       - QA_PROMPT_OVERRIDE=${QA_PROMPT_OVERRIDE:-}
       # Other Services
       - POSTGRES_HOST=relational_db
+      - POSTGRES_USER=${POSTGRES_USER:-}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
+      - POSTGRES_DB=${POSTGRES_DB:-}
       - VESPA_HOST=index
       - WEB_DOMAIN=${WEB_DOMAIN:-}  # For frontend redirect auth purpose for OAuth2 connectors
       # Don't change the NLP model configs unless you know what you're doing
@@ -127,6 +132,7 @@ services:
       - MIN_THREADS_ML_MODELS=${MIN_THREADS_ML_MODELS:-}
       # Indexing Configs
       - NUM_INDEXING_WORKERS=${NUM_INDEXING_WORKERS:-}
+      - DISABLE_INDEX_UPDATE_ON_SWAP=${DISABLE_INDEX_UPDATE_ON_SWAP:-}
       - DASK_JOB_CLIENT_ENABLED=${DASK_JOB_CLIENT_ENABLED:-}
       - CONTINUE_ON_CONNECTOR_FAILURE=${CONTINUE_ON_CONNECTOR_FAILURE:-}
       - EXPERIMENTAL_CHECKPOINTING_ENABLED=${EXPERIMENTAL_CHECKPOINTING_ENABLED:-}
@@ -219,13 +225,14 @@ services:
       options:
         max-size: "50m"
         max-file: "6"
-    # sleep a little bit to allow the web_server / api_server to start up. 
+    # the specified script waits for the api_server to start up. 
     # Without this we've seen issues where nginx shows no error logs but 
     # does not recieve any traffic
+    # NOTE: we have to use dos2unix to remove Carriage Return chars from the file
+    # in order to make this work on both Unix-like systems and windows
     command: > 
-      /bin/sh -c "sleep 10 &&
-        envsubst '$$\{DOMAIN\}' < /etc/nginx/conf.d/app.conf.template.dev > /etc/nginx/conf.d/app.conf &&
-        while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\""
+      /bin/sh -c "dos2unix /etc/nginx/conf.d/run-nginx.sh 
+      && /etc/nginx/conf.d/run-nginx.sh app.conf.template.dev"
   # Run with --profile model-server to bring up the danswer-model-server container
   # Be sure to change MODEL_SERVER_HOST (see above) as well
   # ie. MODEL_SERVER_HOST="model_server" docker compose -f docker-compose.dev.yml -p danswer-stack --profile model-server up -d --build

@@ -1,9 +1,9 @@
 import time
+import traceback
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
 
-import torch
 from sqlalchemy.orm import Session
 
 from danswer.background.indexing.checkpointing import get_time_windows_for_index_attempt
@@ -128,16 +128,21 @@ def _run_indexing(
     indexing_pipeline = build_indexing_pipeline(
         embedder=embedding_model,
         document_index=document_index,
-        ignore_time_skip=(db_embedding_model.status == IndexModelStatus.FUTURE),
+        ignore_time_skip=index_attempt.from_beginning
+        or (db_embedding_model.status == IndexModelStatus.FUTURE),
     )
 
     db_connector = index_attempt.connector
     db_credential = index_attempt.credential
-    last_successful_index_time = get_last_successful_attempt_time(
-        connector_id=db_connector.id,
-        credential_id=db_credential.id,
-        embedding_model=index_attempt.embedding_model,
-        db_session=db_session,
+    last_successful_index_time = (
+        0.0
+        if index_attempt.from_beginning
+        else get_last_successful_attempt_time(
+            connector_id=db_connector.id,
+            credential_id=db_credential.id,
+            embedding_model=index_attempt.embedding_model,
+            db_session=db_session,
+        )
     )
 
     net_doc_change = 0
@@ -180,6 +185,7 @@ def _run_indexing(
 
                 db_session.refresh(index_attempt)
                 if index_attempt.status != IndexingStatus.IN_PROGRESS:
+                    # Likely due to user manually disabling it or model swap
                     raise RuntimeError("Index Attempt was canceled")
 
                 logger.debug(
@@ -238,7 +244,12 @@ def _run_indexing(
                 or db_connector.disabled
                 or index_attempt.status != IndexingStatus.IN_PROGRESS
             ):
-                mark_attempt_failed(index_attempt, db_session, failure_reason=str(e))
+                mark_attempt_failed(
+                    index_attempt,
+                    db_session,
+                    failure_reason=str(e),
+                    full_exception_trace=traceback.format_exc(),
+                )
                 if is_primary:
                     update_connector_credential_pair(
                         db_session=db_session,
@@ -275,6 +286,8 @@ def run_indexing_entrypoint(index_attempt_id: int, num_threads: int) -> None:
     """Entrypoint for indexing run when using dask distributed.
     Wraps the actual logic in a `try` block so that we can catch any exceptions
     and mark the attempt as failed."""
+    import torch
+
     try:
         # set the indexing attempt ID so that all log messages from this process
         # will have it added as a prefix
