@@ -27,7 +27,6 @@ from danswer.configs.chat_configs import MAX_CHUNKS_FED_TO_CHAT
 from danswer.configs.constants import DISABLED_GEN_AI_MSG
 from danswer.configs.constants import MessageType
 from danswer.configs.model_configs import CHUNK_SIZE
-from danswer.configs.model_configs import GEN_AI_MODEL_VERSION
 from danswer.db.chat import create_db_search_doc
 from danswer.db.chat import create_new_chat_message
 from danswer.db.chat import get_chat_message
@@ -48,6 +47,7 @@ from danswer.llm.exceptions import GenAIDisabledException
 from danswer.llm.factory import get_default_llm
 from danswer.llm.interfaces import LLM
 from danswer.llm.utils import get_default_llm_tokenizer
+from danswer.llm.utils import get_default_llm_version
 from danswer.llm.utils import get_max_input_tokens
 from danswer.llm.utils import tokenizer_trim_content
 from danswer.llm.utils import translate_history_to_basemessages
@@ -191,11 +191,15 @@ def stream_chat_message_objects(
         message_text = new_msg_req.message
         chat_session_id = new_msg_req.chat_session_id
         parent_id = new_msg_req.parent_message_id
-        prompt_id = new_msg_req.prompt_id
         reference_doc_ids = new_msg_req.search_doc_ids
         retrieval_options = new_msg_req.retrieval_options
         persona = chat_session.persona
         query_override = new_msg_req.query_override
+
+        # After this section, no_ai_answer is represented by prompt being None
+        prompt_id = new_msg_req.prompt_id
+        if prompt_id is None and persona.prompts and not new_msg_req.no_ai_answer:
+            prompt_id = sorted(persona.prompts, key=lambda x: x.id)[-1].id
 
         if reference_doc_ids is None and retrieval_options is None:
             raise RuntimeError(
@@ -445,7 +449,7 @@ def stream_chat_message_objects(
                 else default_num_chunks
             )
 
-            llm_name = GEN_AI_MODEL_VERSION
+            llm_name = get_default_llm_version()[0]
             if persona.llm_model_version_override:
                 llm_name = persona.llm_model_version_override
 

@@ -165,6 +165,7 @@ export interface IndexAttemptSnapshot {
   id: number;
   status: ValidStatuses | null;
   new_docs_indexed: number;
+  docs_removed_from_index: number;
   total_docs_indexed: number;
   error_msg: string | null;
   full_exception_trace: string | null;
@@ -232,6 +233,10 @@ export interface ConfluenceCredentialJson {
 
 export interface JiraCredentialJson {
   jira_user_email: string;
+  jira_api_token: string;
+}
+
+export interface JiraServerCredentialJson {
   jira_api_token: string;
 }
 

@@ -187,6 +187,8 @@ const Main = () => {
       {popup}
 
       <Text className="mb-2">
+        Setup a Slack bot that connects to Danswer. Once setup, you will be able
+        to ask questions to Danswer directly from Slack. Additionally, you can:
       </Text>
 
       <Text className="mb-2">

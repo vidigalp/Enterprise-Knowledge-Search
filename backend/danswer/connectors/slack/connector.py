@@ -152,16 +152,6 @@ def thread_to_doc(
 ) -> Document:
     channel_id = channel["id"]
 
-    # Define regex pattern to match both 'internal-' and 'ce###-' patterns
-    # The '?' after '\d' makes the digits optional, preventing 'nothing to repeat' error
-    pattern = r'(?:internal-|ce\d*?-)([^-]+)'
-    match = re.search(pattern, channel["name"])
-    
-    # Extract client name from the match, if any
-    client_name = match.group(1) if match else ""
-
-    # Create metadata dictionary, include client name if extracted
-    metadata = {'client_name': client_name} if client_name else {}
     initial_sender_expert_info = expert_info_from_slack_id(
         user_id=thread[0].get("user"), client=client, user_cache=user_cache
     )
